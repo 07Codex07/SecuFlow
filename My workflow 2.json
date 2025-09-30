@@ -1,0 +1,405 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import re\nresults = []\nfor item in items:\n    raw_logs = item['json'].get('stdout', '')\n    lines = [line.strip() for line in raw_logs.split(\"\\n\") if line.strip()]\n    for line in lines:\n        entry = {\n            \"timestamp\": None,\n            \"status\": None,\n            \"user\": None,\n            \"ip\": None,\n            \"port\": None,\n            \"raw\": line\n        }\n        #Match invalid user\n        m_invalid = re.search(r'^(?P<timestamp>\\w+ \\d+ \\d+:\\d+:\\d+).*Invalid user (?P<user>\\S+) from (?P<ip>\\d{1,3}(?:\\.\\d{1,3}){3}) port (?P<port>\\d+)', line)\n        if m_invalid:\n            entry.update({\n                \"timestamp\": m_invalid.group(\"timestamp\"),\n                \"status\": \"Invalid user\",\n                \"user\": m_invalid.group(\"user\"),\n                \"ip\": m_invalid.group(\"ip\"),\n                \"port\": m_invalid.group(\"port\")\n            })\n            results.append({\"json\": entry})\n            continue\n        # Match failed password\n        m_failed = re.search(r'^(?P<timestamp>\\w+ \\d+ \\d+:\\d+:\\d+).*Failed (?:password|none) for (?:invalid user )?(?P<user>\\S+) from (?P<ip>\\d{1,3}(?:\\.\\d{1,3}){3}) port (?P<port>\\d+)', line)\n        if m_failed:\n            entry.update({\n                \"timestamp\": m_failed.group(\"timestamp\"),\n                \"status\": \"Failed password\",\n                \"user\": m_failed.group(\"user\"),\n                \"ip\": m_failed.group(\"ip\"),\n                \"port\": m_failed.group(\"port\")\n            })\n            results.append({\"json\": entry})\n            continue\n        #Match connection closed\n        m_closed = re.search(r'^(?P<timestamp>\\w+ \\d+ \\d+:\\d+:\\d+).*Connection closed by (?:invalid user )?(?P<user>\\S+) (?P<ip>\\d{1,3}(?:\\.\\d{1,3}){3}) port (?P<port>\\d+)', line)\n        if m_closed:\n            entry.update({\n                \"timestamp\": m_closed.group(\"timestamp\"),\n                \"status\": \"Connection closed\",\n                \"user\": m_closed.group(\"user\"),\n                \"ip\": m_closed.group(\"ip\"),\n                \"port\": m_closed.group(\"port\")\n            })\n            results.append({\"json\": entry})\n            continue\n\n        #If none match, keep raw line\n        results.append({\"json\": entry})\n\nreturn results\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        32
+      ],
+      "id": "1ff5bf84-a08a-49de-b276-83086953a493",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all input items (each item = one log line with ip)\nconst items = $input.all();\n\n// Count attempts per IP\nconst counts = {};\nfor (const item of items) {\n  const ip = item.json.ip;\n  if (!counts[ip]) counts[ip] = 0;\n  counts[ip]++;\n}\n\n// Create output only for IPs with > 3 attempts\nconst result = [];\nfor (const [ip, count] of Object.entries(counts)) {\n  if (count > 3) {\n    result.push({\n      json: { ip, count, alert: true }\n    });\n  }\n}\n\n// Send result to next node (e.g., Telegram)\nreturn result;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        32
+      ],
+      "id": "ea113718-849a-41ae-992f-bf8bd5a7bc35",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "chatId": "6617744830",
+        "text": "={{ $json.output }}",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "YES",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "NO",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {},
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1424,
+        -16
+      ],
+      "id": "fdb04d70-c610-4cba-9a2b-45a5cf1298c1",
+      "name": "Send a text message",
+      "webhookId": "d34c0cb9-ae07-48ca-b170-3b246d42a535",
+      "credentials": {
+        "telegramApi": {
+          "id": "AiTzudzkmvlMvt0z",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "501b4a9d-9117-42fd-a1ee-604cddd24063",
+              "leftValue": "={{ $json[\"count\"] }}",
+              "rightValue": "={{ 3 }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        640,
+        128
+      ],
+      "id": "ad5ff3c2-84bd-4e11-a84e-7526e844ff11",
+      "name": "If",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        832,
+        -16
+      ],
+      "id": "e1d16bca-3a40-49ea-b8ce-fb090c975ae8",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a cybersecurity assistant. \nAnalyze the following login attempt data and generate a short 2-3 line summary of what kind of attack this could be.\n\nData:\nIP: {{$json[\"ip\"]}}\nFailed attempts: {{$json[\"count\"]}}\nShould I block IP {{ $json.ip }}?\nReply with YES or NO.\n\nOutput only 2-3 lines.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        -16
+      ],
+      "id": "b6ef4974-2c01-4991-b3f5-8c71317b44b0",
+      "name": "AI Agent",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "model": "llama-3.1-8b-instant",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        176
+      ],
+      "id": "09a078f3-a6b9-47eb-b346-58f478ea7c09",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "GXeQvoKLaWbw3XjH",
+          "name": "Groq account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "chatIds": "6617744830"
+        }
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        144,
+        368
+      ],
+      "id": "a6533890-983c-4e28-9e73-4f1a13bbde09",
+      "name": "Telegram Trigger",
+      "webhookId": "93255775-d41e-4149-b2d6-6f89ea331ff6",
+      "credentials": {
+        "telegramApi": {
+          "id": "AiTzudzkmvlMvt0z",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "949e219d-a2ba-4e95-a3c5-3d63a0753275",
+              "leftValue": "YES",
+              "rightValue": "NO",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        368,
+        432
+      ],
+      "id": "81d624b7-d70f-4ee7-9680-ea86ec5033f7",
+      "name": "If1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        640,
+        320
+      ],
+      "id": "86d026e7-bd73-47a2-b0e1-5d74b32bba52",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "=sudo ufw deny from {{ $json.ip }}"
+      },
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        848,
+        320
+      ],
+      "id": "3c006187-4b71-4e79-a7fe-8ca36b19dd93",
+      "name": "Execute a command1",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "D6hIlWqQEmOpfaTU",
+          "name": "SSH Password account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "sudo journalctl -u ssh -n 200 --no-pager | egrep -i \"failed password|invalid user|connection closed|failed none\""
+      },
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        32,
+        64
+      ],
+      "id": "43879ec3-7d08-4858-9e50-6be6705273db",
+      "name": "Execute a command",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "D6hIlWqQEmOpfaTU",
+          "name": "SSH Password account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        []
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Execute a command1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a command": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "57521724-b0c4-4f48-99d8-cd91fab82324",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3c0a49dc7335e7c1ed9c6775c81706c06bc98da5ef9c8a62aa0effc3b53d8944"
+  },
+  "id": "oDJzJwdmvAQfdEnJ",
+  "tags": []
+}
