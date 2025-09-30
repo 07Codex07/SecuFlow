@@ -33,7 +33,6 @@ and allows a **human-in-the-loop** Telegram approval before blocking attackers.
 
 ## 📸 Screenshots
 Below are key screenshots showing SecuFlow in action.  
-*(Place all images inside a `screenshots/` folder in this repository)*
 
 ### n8n Workflow
 <img width="1821" height="777" alt="Screenshot 2025-09-30 163753" src="https://github.com/user-attachments/assets/01fe369c-f901-4fe0-8156-7971bf2556a8" />
